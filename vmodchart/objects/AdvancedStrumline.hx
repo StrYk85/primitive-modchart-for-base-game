@@ -20,6 +20,7 @@ class AdvancedStrumline extends Strumline {
     public var dummySustain:SustainTrail;
     public var dummyNote:NoteSprite;
     
+    public var oldSustainJitter:Bool = false;
     public var holdTimer:Float = 0;
 
     public function new(noteStyle:NoteStyle, isPlayer:Bool, ?scrollSpeed:Float) {
@@ -75,8 +76,8 @@ class AdvancedStrumline extends Strumline {
     }
 
     override public function playNoteSplash(direction:NoteDirection):Void {
+        // TODO: Fix splash offsets.
         if (!showNotesplash || !noteStyle.isNoteSplashEnabled()) return;
-
         var splash:NoteSplash = constructNoteSplash();
 
         if (splash != null) {
@@ -93,7 +94,6 @@ class AdvancedStrumline extends Strumline {
 
     public function playCoverSprite(holdSprite:SustainSprite):Void {
         if (!showNotesplash || !noteStyle.isHoldNoteCoverEnabled()) return;
-
         var coverSprite:CoverSprite = coverSprites.getFirstAvailable();
 
         if (coverSprite == null) {
@@ -242,6 +242,19 @@ class AdvancedStrumline extends Strumline {
                     holdSprite.destroy();
                 }
             });
+        }
+    }
+
+    public function clean():Void {
+        super.clean();
+        for (sustain in holdSprites) {
+            if (sustain == null) continue;
+            sustain.kill();
+        }
+
+        for (cover in coverSprites) {
+            if (cover == null) continue;
+            cover.kill();
         }
     }
 }

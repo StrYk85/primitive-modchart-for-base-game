@@ -1,12 +1,10 @@
 package vmodchart.objects;
 
-import funkin.graphics.FunkinSprite;
 import flixel.math.FlxAngle;
-import funkin.play.notes.Strumline;
-import funkin.util.assets.FlxAnimationUtil;
-import funkin.data.animation.AnimationDataUtil;
 import flixel.math.FlxPoint;
 import flixel.util.FlxDestroyUtil;
+import funkin.graphics.FunkinSprite;
+import funkin.play.notes.Strumline;
 
 import StringTools;
 
@@ -28,7 +26,6 @@ class CoverSprite extends FunkinSprite {
 
     public function new(noteStyle:NoteStyle) {
         super();
-        // TODO: fix the hold covers on the pixel notestyle
         var leAtlas:Null<FlxFramesCollection> = noteStyle.buildHoldCoverFrames(false);
         if (leAtlas == null) throw 'Could not load spritesheet for note style: ${noteStyle.id}';
 

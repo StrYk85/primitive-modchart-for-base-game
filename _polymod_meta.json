@@ -1,7 +1,7 @@
 {
-    "title": "sustainTest",
+    "title": "Primitive Modcharting System",
     "id": "sustainTest",
-    "description": "",
+    "description": "Adds a primitive modcharting system into the base game.",
     "contributors": [
         {
             "name": "stryk",
@@ -9,7 +9,7 @@
             "url": "https://twitter.com/StrYk85"
         }
     ],
-    "api_version": "0.8.0",
+    "api_version": "0.8.5",
     "mod_version": "1.0.0",
     "license": "Apache-2.0"
 }

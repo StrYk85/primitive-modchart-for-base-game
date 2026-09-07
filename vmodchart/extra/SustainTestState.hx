@@ -1,3 +1,5 @@
+package vmodchart.extra;
+
 import flixel.FlxSprite;
 import funkin.InitState;
 import funkin.modding.module.Module;
@@ -39,7 +41,6 @@ class SustainTestState extends MusicBeatState {
         elapsedTime += elapsed;
         normalSustain.sustainLength -= Math.sin(elapsedTime * 2) * 5;
         customSustain.sustainLength = normalSustain.sustainLength;
-        //customSustain.skew.x += Math.cos(elapsedTime * 2);
 
         customSustain.angle += Math.cos(elapsedTime * 2);
         cover.angle = customSustain.angle;

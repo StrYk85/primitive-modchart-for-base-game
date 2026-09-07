@@ -31,9 +31,13 @@ class ModchartSetter extends Module {
             strumline.onNoteIncoming.add(game.onStrumlineNoteIncoming);
             strumline.zIndex = 1000;
             strumline.cameras = [game.camHUD];
-            final xPos = strumline.isPlayer? (FlxG.width / 2 + Constants.STRUMLINE_X_OFFSET) + (cutoutSize / 2.0) : Constants.STRUMLINE_X_OFFSET + cutoutSize;
-            final yPos = (Preferences.downscroll)? FlxG.height - strumline.height - Constants.STRUMLINE_Y_OFFSET - strumline.noteStyle.getStrumlineOffsets()[1] : Constants.STRUMLINE_Y_OFFSET;
+
+            var xPos = strumline.isPlayer? (FlxG.width / 2 + Constants.STRUMLINE_X_OFFSET) + (cutoutSize / 2.0) : Constants.STRUMLINE_X_OFFSET + cutoutSize;
+            var yPos = Constants.STRUMLINE_Y_OFFSET;
+            if (Preferences.downscroll) yPos = FlxG.height - strumline.height - Constants.STRUMLINE_Y_OFFSET - strumline.noteStyle.getStrumlineOffsets()[1];
+
             strumline.setPosition(xPos, yPos);
+            strumline.fadeInArrows();
         }
         game.add(game.opponentStrumline);
         game.add(game.playerStrumline);
@@ -42,48 +46,50 @@ class ModchartSetter extends Module {
         game.regenNoteData();
     }
 
-    private function reprocessNotes() {
-        final curStage = game.currentStage;
+    private function reprocessNotes(elapsed:Float) {
+        final curStage:Null<Stage> = game.currentStage;
+        final stageExists:Bool = curStage != null && !game.isMinimalMode;
+        if (!stageExists) return;
+
         for (strumline in [game.opponentStrumline, game.playerStrumline]) {
             if (strumline == null || strumline.notes?.members == null) continue;
-            if (strumline.toString() != 'PolymodScriptClass<vmodchart.objects.AdvancedStrumline>') continue;
+            if (strumline.toString() != 'PolymodScriptClass<vmodchart.objects.AdvancedStrumline>') continue; // this is so stupid
 
+            final canPlay:Bool = strumline.isPlayer && !game.isBotPlayMode;
+            final char:Null<BaseCharacter> = stageExists? (strumline.isPlayer? curStage.getBoyfriend() : curStage.getDad()) : null;
             for (sustain in strumline.holdSprites?.members) {
                 if (sustain == null || !sustain.alive || sustain.noteData == null) continue;
 
                 if (sustain.hitNote && !sustain.missedNote && sustain.sustainLength > 0) {
-                    final char = null;
-                    if (curStage != null) char = strumline.isPlayer? curStage.getBoyfriend() : curStage.getDad();
-                    if (strumline.isPlayer && !game.isBotPlayMode) {
+                    if (canPlay) {
                         if (sustain.scoreable) {
-                            game.health += Constants.HEALTH_HOLD_BONUS_PER_SECOND * FlxG.elapsed;
-                            game.songScore += Constants.SCORE_HOLD_BONUS_PER_SECOND * FlxG.elapsed;
+                            game.health += Constants.HEALTH_HOLD_BONUS_PER_SECOND * elapsed;
+                            game.songScore += Constants.SCORE_HOLD_BONUS_PER_SECOND * elapsed;
                         }
                     }
-                    if (curStage != null && char != null && char.isSinging()) {
+                    if (char != null && char.isSinging()) {
                         char.holdTimer = 0;
 
-                        final conductor = strumline.conductorInUse;
-                        if (strumline.holdTimer >= (conductor.stepLengthMs / 1000)) {
-                            strumline.holdTimer = 0;
-                            strumline.dummyNote.noteData = sustain.noteData;
-                            strumline.dummyNote.strumTime = sustain.strumTime;
-                            strumline.dummyNote.direction = sustain.noteDirection;
-                            var ev = new HitNoteScriptEvent(strumline.dummyNote, 0, 0, (strumline.isPlayer && !game.isBotPlayMode)? 'perfect-hold' : 'hold', false, 0);
-                            curStage.dispatchToCharacters(ev);
+                        if (strumline.oldSustainJitter) {
+                            final conductor = strumline.conductorInUse;
+                            if (strumline.holdTimer >= (conductor.stepLengthMs / 1000)) {
+                                strumline.holdTimer = 0;
+                                strumline.dummyNote.noteData = sustain.noteData;
+                                strumline.dummyNote.strumTime = sustain.strumTime;
+                                strumline.dummyNote.direction = sustain.noteDirection;
+                                var ev = new HitNoteScriptEvent(strumline.dummyNote, 0, 0, canPlay? 'perfect-hold' : 'hold', false, 0);
+                                curStage.dispatchToCharacters(ev);
+                            }
+                            else strumline.holdTimer += elapsed;
                         }
-                        else strumline.holdTimer += FlxG.elapsed;
                     }
                 }
 
                 if (sustain.missedNote && !sustain.handledMiss) {
                     sustain.handledMiss = true;
 
-                    if (curStage != null && sustain.scoreable) {
-                        if (strumline.isPlayer && !game.isBotPlayMode) {
-                            final char = null;
-                            char = strumline.isPlayer? curStage.getBoyfriend() : curStage.getDad();
-
+                    if (sustain.scoreable) {
+                        if (canPlay) {
                             if (sustain.scoreable && sustain != null) {
                                 if (sustain.sustainLength > Constants.HOLD_DROP_PENALTY_THRESHOLD_MS) {
                                     var remainingLengthSec = sustain.sustainLength / Constants.MS_PER_SEC;
@@ -112,12 +118,10 @@ class ModchartSetter extends Module {
                                         FunkinSound.playOnce(Paths.soundRandom('missnote', 1, 3), FlxG.random.float(0.5, 0.6));
                                     }
                                 }
-                                else
-                                    trace('Hold note too short, not penalizing...');
                             }
                         }
                         else 
-                            char.playSingAnimation(sustain.noteData.getDirection(), true);
+                            if (char != null) char.playSingAnimation(sustain.noteData.getDirection(), true);
                     }
                 }
             }
@@ -131,14 +135,6 @@ class ModchartSetter extends Module {
 
     function onUpdate(e) {
         super.onUpdate(e);
-        reprocessNotes();
-        // for (strumline in [game.opponentStrumline, game.playerStrumline]) {
-        //     if (strumline != null) {
-        //         for (a => strumNote in strumline.strumlineNotes.members) {
-        //             strumNote.y = 100 + Math.sin((game.conductorInUse.songPosition / 1000) + a) * 100;
-        //             strumNote.skew.y = Math.sin(game.conductorInUse.songPosition / 1000) * -25;
-        //         }
-        //     }
-        // }
+        if (!game.isInCutscene) reprocessNotes(e.elapsed);
     }
 }
