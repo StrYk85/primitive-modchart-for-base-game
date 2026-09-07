@@ -8,6 +8,7 @@ import flixel.math.FlxAngle;
 
 import funkin.play.notes.Strumline;
 import funkin.play.notes.SustainTrail;
+import funkin.play.notes.NoteSprite;
 import funkin.play.notes.notekind.NoteKind;
 import funkin.play.notes.notekind.NoteKindManager;
 import funkin.util.GRhythmUtil;
@@ -15,7 +16,10 @@ import funkin.util.GRhythmUtil;
 class AdvancedStrumline extends Strumline {
     public var holdSprites:FlxTypedSpriteGroup<SustainSprite>;
     public var coverSprites:FlxTypedSpriteGroup<CoverSprite>;
+
     public var dummySustain:SustainTrail;
+    public var dummyNote:NoteSprite;
+    
     public var holdTimer:Float = 0;
 
     public function new(noteStyle:NoteStyle, isPlayer:Bool, ?scrollSpeed:Float) {
@@ -32,6 +36,7 @@ class AdvancedStrumline extends Strumline {
         add(coverSprites);
 
         dummySustain = new SustainTrail(0, 0, noteStyle);
+        dummyNote = new NoteSprite(noteStyle);
     }
 
     override public function buildHoldNoteSprite(note:SongNoteData):SustainSprite {
@@ -60,44 +65,29 @@ class AdvancedStrumline extends Strumline {
             sustainSprite.hitNote = false;
             sustainSprite.visible = true;
             sustainSprite.alpha = 1.0;
-            //sustainSprite.graphic.destroyOnNoUse = false;
+            sustainSprite.graphic.destroyOnNoUse = false;
             if (noteKind != null) sustainSprite.scoreable = noteKind.scoreable;
 
-            sustainSprite.x = -9999;
-            sustainSprite.y = -9999;
+            sustainSprite.setPosition(-9999, -9999);
         }
 
         return null;
     }
 
-    override public function hitNote(note:NoteSprite, removeNote:Bool = true):Void {
-        playConfirm(note.direction);
-        note.hasBeenHit = true;
-        holdTimer = 0;
+    override public function playNoteSplash(direction:NoteDirection):Void {
+        if (!showNotesplash || !noteStyle.isNoteSplashEnabled()) return;
 
-        if (removeNote) killNote(note);
-        else {
-            note.alpha = 0.5;
-            note.desaturate();
-        }
+        var splash:NoteSplash = constructNoteSplash();
 
-        if (note.noteData.length <= 0) return;
+        if (splash != null) {
+            final strumNote:StrumlineNote = getByDirection(direction);
+            splash.play(direction);
 
-        var sustainNote = null;
-        for (holdSprite in holdSprites.members) {
-            if (holdSprite == null || !holdSprite.alive) continue;
-            if ((holdSprite.strumTime == note.noteData.time) && (holdSprite.noteDirection == note.noteData.getDirection())) {
-                sustainNote = holdSprite;
-                break;
-            }
-        }
+            splash.setPosition(strumNote.x, strumNote.y);
+            splash.x += noteStyle.getSplashOffsets()[0] * splash.scale.x;
+            splash.y += noteStyle.getSplashOffsets()[1] * splash.scale.y;
 
-        if (sustainNote != null) {
-            sustainNote.hitNote = true;
-            sustainNote.missedNote = false;
-
-            sustainNote.sustainLength = Math.min(sustainNote.fullSustainLength, (sustainNote.strumTime + sustainNote.fullSustainLength) - conductorInUse.songPosition);
-            playCoverSprite(sustainNote);
+            splash.graphic.destroyOnNoUse = false;
         }
     }
 
@@ -120,13 +110,44 @@ class AdvancedStrumline extends Strumline {
         coverSprite.positionToStrumline(this);
     }
 
+    override public function hitNote(note:NoteSprite, removeNote:Bool = true):Void {
+        playConfirm(note.direction);
+        note.hasBeenHit = true;
+        holdTimer = 0;
+
+        if (removeNote) killNote(note);
+        else {
+            note.alpha = 0.5;
+            note.desaturate();
+        }
+
+        if (note.noteData.length <= 0) return;
+
+        var sustainNote = null;
+        for (holdSprite in holdSprites.members) {
+            if (holdSprite == null || !holdSprite.alive) continue;
+            if ((holdSprite.strumTime == note.noteData.time) && (holdSprite.noteDirection == note.direction)) {
+                sustainNote = holdSprite;
+                break;
+            }
+        }
+
+        if (sustainNote != null) {
+            sustainNote.hitNote = true;
+            sustainNote.missedNote = false;
+
+            sustainNote.sustainLength = Math.min(sustainNote.fullSustainLength, (sustainNote.strumTime + sustainNote.fullSustainLength) - conductorInUse.songPosition);
+            playCoverSprite(sustainNote);
+        }
+    }
+
     public function updateNotes():Void {
         super.updateNotes();
         if (noteData.length == 0) return;
 
         for (note in notes.members) {
             if (note == null || !note.alive) continue;
-            final direction:Int = note.noteData.getDirection();
+            final direction:Int = note.direction;
             final strumNote:StrumlineNote = getByDirection(direction);
 
             final notePos:Float = GRhythmUtil.getNoteY(note.strumTime, scrollSpeed, false, conductorInUse);
@@ -139,10 +160,8 @@ class AdvancedStrumline extends Strumline {
 
             if (!customPositionData) {
                 note.angle = daAngle;
-                note.skew.x = strumNote.skew.x;
-                note.skew.y = strumNote.skew.y;
-                note.x = strumX + xPos;
-                note.y = strumY + yPos;
+                note.skew.set(strumNote.skew.x, strumNote.skew.y);
+                note.setPosition(strumX + xPos, strumY + yPos);
             }
         }
 
@@ -160,13 +179,13 @@ class AdvancedStrumline extends Strumline {
             final strumY:Float = strumNote.y + strumNote.height / 2;
 
             final renderWindowEnd:Float = holdSprite.strumTime + holdSprite.fullSustainLength + Constants.HIT_WINDOW_MS + (renderDistanceMs / 8);
-            holdSprite.skew.x = strumNote.skew.x;
-            holdSprite.skew.y = strumNote.skew.y;
             holdSprite.angle = daAngle;
+            holdSprite.skew.set(strumNote.skew.x, strumNote.skew.y);
             holdSprite.visible = true;
 
             if (holdSprite.cover != null) {
                 holdSprite.cover.angle = daAngle;
+                holdSprite.cover.skew.set(strumNote.skew.x, strumNote.skew.y);
                 holdSprite.cover.positionToStrumline(this);
             }
             
@@ -189,10 +208,8 @@ class AdvancedStrumline extends Strumline {
                 holdSprite.kill();
             }
             else if (holdSprite.missedNote && (holdSprite.fullSustainLength > holdSprite.sustainLength)) {
-                if (!customPositionData) {
-                    holdSprite.y = strumY + yPos + ((holdSprite.fullSustainLength - holdSprite.sustainLength) * Constants.PIXELS_PER_MS);
-                    holdSprite.x = strumX + xPos;
-                }
+                if (!customPositionData) 
+                    holdSprite.setPosition(strumX + xPos, strumY + yPos + ((holdSprite.fullSustainLength - holdSprite.sustainLength) * Constants.PIXELS_PER_MS));
                 if (holdSprite.cover != null) holdSprite.cover.kill();
             }
             else if (conductorInUse.songPosition > holdSprite.strumTime && holdSprite.hitNote) {
@@ -200,15 +217,12 @@ class AdvancedStrumline extends Strumline {
                 
                 if (!customPositionData) {
                     holdSprite.sustainLength = (holdSprite.strumTime + holdSprite.fullSustainLength) - conductorInUse.songPosition;
-                    holdSprite.y = strumY;
-                    holdSprite.x = strumX;
+                    holdSprite.setPosition(strumX, strumY);
                 }
             }
             else {
-                if (!customPositionData) {
-                    holdSprite.y = strumY + yPos;
-                    holdSprite.x = strumX + xPos;
-                }
+                if (!customPositionData) 
+                    holdSprite.setPosition(strumX + xPos, strumY + yPos);
             }
         }
     }

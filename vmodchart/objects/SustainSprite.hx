@@ -75,7 +75,7 @@ class SustainSprite extends FlxSprite {
     }
 
     override public function draw():Void {
-        if (sustainLength <= 0) return;
+        if (sustainLength <= 10) return;
         super.draw();
         height = Math.abs(getSustainInPixels());
     }
@@ -154,14 +154,15 @@ class SustainSprite extends FlxSprite {
                 final diff = (accountedOffset / frameHeight) * 2;
                 _tileMatrix.translate(SKEW_X * diff, -SKEW_Y * diff);
             }
+        }
+        if (!isPixel) leRect.height *= 0.9;
 
-            leFrame.clip(leRect);
-            camera.drawPixels(leFrame, framePixels, _tileMatrix, colorTransform, blend, antialiasing, shader);
+        if (leRect.height != frameHeight) leFrame.clip(leRect);
+        camera.drawPixels(leFrame, framePixels, _tileMatrix, colorTransform, blend, antialiasing, shader);
+        if (0 > sustainHeight) {
             leRect.put();
             return;
         }
-        else 
-            camera.drawPixels(leFrame, framePixels, _tileMatrix, colorTransform, blend, antialiasing, shader);
 
         setHoldGraphic(false);
         var lastHeight = 0;

@@ -3,15 +3,15 @@ package vmodchart;
 import flixel.math.FlxMath;
 import funkin.Highscore;
 import funkin.modding.module.Module;
+import funkin.modding.events.HitNoteScriptEvent;
+import funkin.modding.events.HoldNoteScriptEvent;
 import funkin.ui.FullScreenScaleMode;
 import funkin.play.PlayState;
 import funkin.audio.FunkinSound;
-import funkin.modding.events.HoldNoteScriptEvent;
-import funkin.modding.events.ScriptEventDispatcher;
 
 class ModchartSetter extends Module {
     public function new() {
-        super('ModchartSetter', 100, {state:PlayState});
+        super('ModchartSetter', 0, {state:PlayState});
     }
 
     private var game(get, never):PlayState;
@@ -60,15 +60,19 @@ class ModchartSetter extends Module {
                             game.songScore += Constants.SCORE_HOLD_BONUS_PER_SECOND * FlxG.elapsed;
                         }
                     }
-                    else if (curStage != null && char != null && char.isSinging()) {
+                    if (curStage != null && char != null && char.isSinging()) {
                         char.holdTimer = 0;
 
-                        // final conductor = strumline.conductorInUse;
-                        // if (strumline.holdTimer >= (conductor.stepLengthMs / 1000)) {
-                        //     strumline.holdTimer = 0;
-                        //     char.playSingAnimation(sustain.noteData.getDirection(), false);
-                        // }
-                        // else strumline.holdTimer += FlxG.elapsed;
+                        final conductor = strumline.conductorInUse;
+                        if (strumline.holdTimer >= (conductor.stepLengthMs / 1000)) {
+                            strumline.holdTimer = 0;
+                            strumline.dummyNote.noteData = sustain.noteData;
+                            strumline.dummyNote.strumTime = sustain.strumTime;
+                            strumline.dummyNote.direction = sustain.noteDirection;
+                            var ev = new HitNoteScriptEvent(strumline.dummyNote, 0, 0, (strumline.isPlayer && !game.isBotPlayMode)? 'perfect-hold' : 'hold', false, 0);
+                            curStage.dispatchToCharacters(ev);
+                        }
+                        else strumline.holdTimer += FlxG.elapsed;
                     }
                 }
 
@@ -78,31 +82,28 @@ class ModchartSetter extends Module {
                     if (curStage != null && sustain.scoreable) {
                         if (strumline.isPlayer && !game.isBotPlayMode) {
                             final char = null;
-                            if (curStage != null) char = strumline.isPlayer? curStage.getBoyfriend() : curStage.getDad();
+                            char = strumline.isPlayer? curStage.getBoyfriend() : curStage.getDad();
 
-                            if (sustain.scoreable) {
+                            if (sustain.scoreable && sustain != null) {
                                 if (sustain.sustainLength > Constants.HOLD_DROP_PENALTY_THRESHOLD_MS) {
-                                    trace('Player dropped a hold note, penalizing... (has hit: ${sustain.hitNote})');
-
                                     var remainingLengthSec = sustain.sustainLength / Constants.MS_PER_SEC;
                                     var healthChangeUncapped = remainingLengthSec * Constants.HEALTH_HOLD_DROP_PENALTY_PER_SECOND;
-                                    // If the base note of the hold was missed, don't penalize them more on top of that.
                                     var healthChangeMax = Constants.HEALTH_HOLD_DROP_PENALTY_MAX + (sustain.hitNote ? Constants.HEALTH_MISS_PENALTY : 0);
                                     var healthChange = FlxMath.bound(healthChangeUncapped, 0, healthChangeMax);
                                     var scoreChange:Float = Constants.SCORE_HOLD_DROP_PENALTY_PER_SECOND * remainingLengthSec;
 
-                                    strumline.dummySustain.strumTime = sustain.strumTime;
-                                    strumline.dummySustain.noteDirection = sustain.noteDirection;
-                                    strumline.dummySustain.sustainLength = sustain.sustainLength;
-                                    strumline.dummySustain.fullSustainLength = sustain.fullSustainLength;
-                                    var ev:HoldNoteScriptEvent = new HoldNoteScriptEvent('NOTE_HOLD_DROP', strumline.dummySustain, healthChange, scoreChange, true, Highscore.tallies.combo);
-                                    PlayState.instance.dispatchEvent(ev);
-                                    // ScriptEventDispatcher.callEvent(game.currentSong, ev);
+                                    var dummy = strumline.dummySustain;
+                                    dummy.noteData = sustain.noteData;
+                                    dummy.strumTime = sustain.strumTime;
+                                    dummy.noteDirection = sustain.noteDirection;
+                                    dummy.sustainLength = sustain.sustainLength;
+                                    dummy.fullSustainLength = sustain.fullSustainLength;
+                                    var ev:HoldNoteScriptEvent = new HoldNoteScriptEvent('NOTE_HOLD_DROP', dummy, healthChange, scoreChange, true, Highscore.tallies.combo);
+                        
+                                    game.dispatchEvent(ev);
                                     if (ev.eventCanceled) continue;
-
-                                    trace('Penalizing score by ${ev.score} and health by ${ev.healthChange} for dropping hold note (is combo break: ${ev.isComboBreak})!');
+                                    
                                     game.applyScore(ev.score, '', ev.healthChange, ev.isComboBreak);
-
                                     if (ev.playSound) {
                                         if (game.vocals != null) {
                                             if (game.vocals.legacyVoiceSystem && !game.vocals.legacyVoiceUsesPlayer) game.vocals.opponentVolume = 0;
@@ -131,11 +132,13 @@ class ModchartSetter extends Module {
     function onUpdate(e) {
         super.onUpdate(e);
         reprocessNotes();
-        if (game.playerStrumline != null) {
-            for (strumNote in game.playerStrumline.strumlineNotes.members) {
-                strumNote.angle = Math.sin(game.conductorInUse.songPosition / 1000) * 50;
-                //strumNote.skew.x = strumNote.angle;
-            }
-        }
+        // for (strumline in [game.opponentStrumline, game.playerStrumline]) {
+        //     if (strumline != null) {
+        //         for (a => strumNote in strumline.strumlineNotes.members) {
+        //             strumNote.y = 100 + Math.sin((game.conductorInUse.songPosition / 1000) + a) * 100;
+        //             strumNote.skew.y = Math.sin(game.conductorInUse.songPosition / 1000) * -25;
+        //         }
+        //     }
+        // }
     }
 }
