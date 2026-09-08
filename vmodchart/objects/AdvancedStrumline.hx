@@ -187,6 +187,7 @@ class AdvancedStrumline extends Strumline {
                 holdSprite.cover.angle = daAngle;
                 holdSprite.cover.skew.set(strumNote.skew.x, strumNote.skew.y);
                 holdSprite.cover.positionToStrumline(this);
+                holdSprite.cover.visible = true;
             }
             
             if (conductorInUse.songPosition > holdSprite.strumTime && holdSprite.hitNote && !holdSprite.missedNote) {

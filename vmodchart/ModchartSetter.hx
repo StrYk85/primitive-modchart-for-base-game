@@ -11,7 +11,7 @@ import funkin.audio.FunkinSound;
 
 class ModchartSetter extends Module {
     public function new() {
-        super('ModchartSetter', 0, {state:PlayState});
+        super('ModchartSetter', 0);
     }
 
     private var game(get, never):PlayState;
@@ -47,9 +47,9 @@ class ModchartSetter extends Module {
     }
 
     private function reprocessNotes(elapsed:Float) {
-        final curStage:Null<Stage> = game.currentStage;
-        final stageExists:Bool = curStage != null && !game.isMinimalMode;
-        if (!stageExists) return;
+        final curStage:Null<Stage> = game?.currentStage;
+        final stageExists:Bool = curStage != null;
+        if (!stageExists && !game.isMinimalMode) return;
 
         for (strumline in [game.opponentStrumline, game.playerStrumline]) {
             if (strumline == null || strumline.notes?.members == null) continue;
@@ -88,41 +88,39 @@ class ModchartSetter extends Module {
                 if (sustain.missedNote && !sustain.handledMiss) {
                     sustain.handledMiss = true;
 
-                    if (sustain.scoreable) {
-                        if (canPlay) {
-                            if (sustain.scoreable && sustain != null) {
-                                if (sustain.sustainLength > Constants.HOLD_DROP_PENALTY_THRESHOLD_MS) {
-                                    var remainingLengthSec = sustain.sustainLength / Constants.MS_PER_SEC;
-                                    var healthChangeUncapped = remainingLengthSec * Constants.HEALTH_HOLD_DROP_PENALTY_PER_SECOND;
-                                    var healthChangeMax = Constants.HEALTH_HOLD_DROP_PENALTY_MAX + (sustain.hitNote ? Constants.HEALTH_MISS_PENALTY : 0);
-                                    var healthChange = FlxMath.bound(healthChangeUncapped, 0, healthChangeMax);
-                                    var scoreChange:Float = Constants.SCORE_HOLD_DROP_PENALTY_PER_SECOND * remainingLengthSec;
+                    if (canPlay) {
+                        if (sustain.scoreable) {
+                            if (sustain.sustainLength > Constants.HOLD_DROP_PENALTY_THRESHOLD_MS) {
+                                var remainingLengthSec = sustain.sustainLength / Constants.MS_PER_SEC;
+                                var healthChangeUncapped = remainingLengthSec * Constants.HEALTH_HOLD_DROP_PENALTY_PER_SECOND;
+                                var healthChangeMax = Constants.HEALTH_HOLD_DROP_PENALTY_MAX + (sustain.hitNote ? Constants.HEALTH_MISS_PENALTY : 0);
+                                var healthChange = FlxMath.bound(healthChangeUncapped, 0, healthChangeMax);
+                                var scoreChange:Float = Constants.SCORE_HOLD_DROP_PENALTY_PER_SECOND * remainingLengthSec;
 
-                                    var dummy = strumline.dummySustain;
-                                    dummy.noteData = sustain.noteData;
-                                    dummy.strumTime = sustain.strumTime;
-                                    dummy.noteDirection = sustain.noteDirection;
-                                    dummy.sustainLength = sustain.sustainLength;
-                                    dummy.fullSustainLength = sustain.fullSustainLength;
-                                    var ev:HoldNoteScriptEvent = new HoldNoteScriptEvent('NOTE_HOLD_DROP', dummy, healthChange, scoreChange, true, Highscore.tallies.combo);
-                        
-                                    game.dispatchEvent(ev);
-                                    if (ev.eventCanceled) continue;
-                                    
-                                    game.applyScore(ev.score, '', ev.healthChange, ev.isComboBreak);
-                                    if (ev.playSound) {
-                                        if (game.vocals != null) {
-                                            if (game.vocals.legacyVoiceSystem && !game.vocals.legacyVoiceUsesPlayer) game.vocals.opponentVolume = 0;
-                                            game.vocals.playerVolume = 0;
-                                        }
-                                        FunkinSound.playOnce(Paths.soundRandom('missnote', 1, 3), FlxG.random.float(0.5, 0.6));
+                                var dummy = strumline.dummySustain;
+                                dummy.noteData = sustain.noteData;
+                                dummy.strumTime = sustain.strumTime;
+                                dummy.noteDirection = sustain.noteDirection;
+                                dummy.sustainLength = sustain.sustainLength;
+                                dummy.fullSustainLength = sustain.fullSustainLength;
+                                var ev:HoldNoteScriptEvent = new HoldNoteScriptEvent('NOTE_HOLD_DROP', dummy, healthChange, scoreChange, true, Highscore.tallies.combo);
+                    
+                                game.dispatchEvent(ev);
+                                if (ev.eventCanceled) continue;
+                                
+                                game.applyScore(ev.score, '', ev.healthChange, ev.isComboBreak);
+                                if (ev.playSound) {
+                                    if (game.vocals != null) {
+                                        if (game.vocals.legacyVoiceSystem && !game.vocals.legacyVoiceUsesPlayer) game.vocals.opponentVolume = 0;
+                                        game.vocals.playerVolume = 0;
                                     }
+                                    FunkinSound.playOnce(Paths.soundRandom('missnote', 1, 3), FlxG.random.float(0.5, 0.6));
                                 }
                             }
                         }
-                        else 
-                            if (char != null) char.playSingAnimation(sustain.noteData.getDirection(), true);
                     }
+                    else 
+                        if (char != null) char.playSingAnimation(sustain.noteData.getDirection(), true);
                 }
             }
         }
@@ -130,11 +128,17 @@ class ModchartSetter extends Module {
 
     function onStateChangeEnd(e) {
         super.onStateChangeEnd(e);
-        resetStrumlines();
+        if (e.targetState is PlayState) resetStrumlines();
+    }
+
+    function onSubStateOpenEnd(e) {
+        super.onSubStateOpenEnd(e);
+        if (e.targetState is PlayState) resetStrumlines();
     }
 
     function onUpdate(e) {
         super.onUpdate(e);
+        if (game == null) return;
         if (!game.isInCutscene) reprocessNotes(e.elapsed);
     }
 }
