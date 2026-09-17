@@ -56,14 +56,8 @@ class AdvancedStrumline extends Strumline {
             if (noteKindStyle == null) noteKindStyle = NoteKindManager.getNoteStyle(note.kind, null);
             if (noteKindStyle == null) noteKindStyle = this.noteStyle;
 
+            sustainSprite.setParams(note);
             sustainSprite.parentStrumline = this;
-            sustainSprite.noteData = note;
-            sustainSprite.strumTime = note.time;
-            sustainSprite.noteDirection = note.getDirection();
-            sustainSprite.fullSustainLength = note.length;
-            sustainSprite.sustainLength = note.length;
-            sustainSprite.missedNote = false;
-            sustainSprite.hitNote = false;
             sustainSprite.visible = true;
             sustainSprite.alpha = 1.0;
             sustainSprite.graphic.destroyOnNoUse = false;

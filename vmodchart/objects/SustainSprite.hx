@@ -34,6 +34,10 @@ class SustainSprite extends FlxSprite {
     public var isPixel:Bool = false;
     public var cover:Null<CoverSprite> = null;
 
+    var _tileMatrix:FlxMatrix = new FlxMatrix();
+    var _skewMatrix:FlxMatrix = new FlxMatrix();
+    public var skew(default, null):FlxPoint = new FlxPoint();
+
     public function new(dir:Int, susLength:Float, noteStyle:NoteStyle) {
         super();
         final assetPath:String = noteStyle.getHoldNoteAssetPath();
@@ -42,41 +46,46 @@ class SustainSprite extends FlxSprite {
         var dirLength:Float = Strumline.DIRECTIONS.length * 2;
         loadGraphic(image, true, image.width / dirLength, image.height);
 
-        this.isPixel = noteStyle.isHoldNotePixel();
+        isPixel = noteStyle.isHoldNotePixel();
         if (isPixel) antialiasing = false;
 
         final noteZoom:Float = noteStyle.fetchHoldNoteScale();
-        setGraphicSize(this.width * noteZoom, this.height * noteZoom);
+        setGraphicSize(width * noteZoom, height * noteZoom);
 
-        this.noteDirection = dir;
-        this.sustainLength = susLength;
+        noteDirection = dir;
+        sustainLength = susLength;
         height = Math.abs(sustainLength * Constants.PIXELS_PER_MS * scrollSpeed);
     }
 
-    public function copySustain(oldie:SustainTrail):Void {
-        noteData = oldie.noteData;
-        strumTime = oldie.strumTime;
-        noteDirection = oldie.noteDirection;
-        fullSustainLength = oldie.fullSustainLength;
-        sustainLength = oldie.sustainLength;
-        parentStrumline = oldie.parentStrumline;
-        scoreable = oldie.scoreable;
+    public function resetParams():Void {
+        strumTime = noteDirection = sustainLength = fullSustainLength = 0;
+        hitNote = missedNote = handledMiss = false;
+        noteData = null;
     }
 
-    private function resetParams():Void {
-        strumTime = 0;
-        noteDirection = 0;
-        sustainLength = 0;
-        fullSustainLength = 0;
-        noteData = null;
+    public function setParams(note:SongNoteData):Void {
+        hitNote = missedNote = handledMiss = false;
+        sustainLength = fullSustainLength = note.length;
+        noteDirection = note.getDirection();
+        strumTime = note.time;
+        noteData = note;
+    }
 
-        hitNote = false;
-        missedNote = false;
+    function setHoldGraphic(bool:Bool):Void {
+        var frameID = (noteDirection % 4) * 2;
+        if (bool) frameID++;
+        frame = frames.frames[frameID];
+
+        height = Math.abs(scale.y) * frameHeight;
+		origin.set(width / 2, 0);
+    }
+
+    public function getSustainInPixels():Float {
+        return sustainLength * Constants.PIXELS_PER_MS * scrollSpeed;
     }
 
     override public function draw():Void {
-        if (sustainLength <= 10) return;
-        super.draw();
+        if (sustainLength > 0) super.draw();
         height = Math.abs(getSustainInPixels());
     }
 
@@ -96,14 +105,10 @@ class SustainSprite extends FlxSprite {
 		return newRect.getRotatedBounds(angle, _scaledOrigin, newRect);
 	}
 
-    var _tileMatrix:FlxMatrix = new FlxMatrix();
-    var _skewMatrix:FlxMatrix = new FlxMatrix();
-    public var skew(default, null):FlxPoint = new FlxPoint();
-
     override function drawFrameComplex(frame:FlxFrame, camera:FlxCamera):Void {
         setHoldGraphic(true);
-        final matrix = this._matrix;
-        frame.prepareMatrix(matrix, 0, checkFlipX() || checkFlipY(), false);
+        final matrix = _matrix;
+        frame.prepareMatrix(matrix, 0, checkFlipX(), false);
         matrix.translate(-origin.x, 0);
 		matrix.scale(scale.x, scale.y);
 		
@@ -112,7 +117,7 @@ class SustainSprite extends FlxSprite {
 			matrix.rotateWithTrig(_cosAngle, _sinAngle);
 		}
 
-        final canSkew = skew.x != 0 || skew.y != 0;
+        final canSkew:Bool = skew.x != 0 || skew.y != 0;
         if (canSkew) {
 			_skewMatrix.setTo(1, Math.tan(skew.y * FlxAngle.TO_RAD), Math.tan(skew.x * FlxAngle.TO_RAD), 1, 0, 0);
 			matrix.concat(_skewMatrix);
@@ -126,20 +131,11 @@ class SustainSprite extends FlxSprite {
             _point.y = Math.floor(_point.y);
         }
 
-        final heightOffset = isPixel? height : height / 2;
-        var sustainHeight = getSustainInPixels() - heightOffset;
+        final sustainHeight = getSustainInPixels() - (isPixel? height : height / 2);
         final leAngle:Float = angle * FlxAngle.TO_RAD;
-
-        var SKEW_X = 0;
-        var SKEW_Y = 0;
-        if (canSkew) {
-            SKEW_X = (skew.x / 2) * Math.cos(leAngle);
-            SKEW_Y = (skew.y / 2) * Math.sin(leAngle);
-        }
 
         _tileMatrix.copyFrom(matrix);
         _tileMatrix.translate(_point.x - (sustainHeight * Math.sin(leAngle)), _point.y + (sustainHeight * Math.cos(leAngle)));
-        if (canSkew) _tileMatrix.translate((sustainHeight * _skewMatrix.c) * Math.cos(leAngle), -(sustainHeight * _skewMatrix.b) * Math.sin(leAngle));
 
         var leFrame = _frame;
         var leRect:FlxRect = new FlxRect(0, 0, frameWidth, frameHeight);
@@ -150,13 +146,10 @@ class SustainSprite extends FlxSprite {
             leRect.y = accountedOffset;
             leRect.height -= accountedOffset;
             _tileMatrix.translate(-daOffset * Math.sin(leAngle), daOffset * Math.cos(leAngle));
-            if (canSkew) {
-                final diff = (accountedOffset / frameHeight) * 2;
-                _tileMatrix.translate(SKEW_X * diff, -SKEW_Y * diff);
-            }
         }
-        if (!isPixel) leRect.height *= 0.9;
+        else if (canSkew) _tileMatrix.translate((sustainHeight * _skewMatrix.c) * Math.cos(leAngle), -(sustainHeight * _skewMatrix.b) * Math.sin(leAngle));
 
+        if (!isPixel) leRect.height *= 0.9;
         if (leRect.height != frameHeight) leFrame.clip(leRect);
         camera.drawPixels(leFrame, framePixels, _tileMatrix, colorTransform, blend, antialiasing, shader);
         if (0 > sustainHeight) {
@@ -165,7 +158,7 @@ class SustainSprite extends FlxSprite {
         }
 
         setHoldGraphic(false);
-        var lastHeight = 0;
+        var lastHeight:Float = 0;
 
         while (lastHeight < sustainHeight) {
             final distance = sustainHeight - (lastHeight + height);
@@ -174,11 +167,6 @@ class SustainSprite extends FlxSprite {
 
             _tileMatrix.copyFrom(matrix);
             _tileMatrix.translate(_point.x - (distance * Math.sin(leAngle)), _point.y + (distance * Math.cos(leAngle)));
-            if (canSkew) {
-                SKEW_X = (lastHeight * _skewMatrix.c) * Math.cos(leAngle);
-                SKEW_Y = (lastHeight * _skewMatrix.b) * Math.sin(leAngle);
-                _tileMatrix.translate((sustainHeight * _skewMatrix.c) * Math.cos(leAngle) - SKEW_X, (sustainHeight * _skewMatrix.b) * -Math.sin(leAngle) + SKEW_Y);
-            }
             
             if (lastHeight > sustainHeight) {
                 final daOffset = lastHeight - sustainHeight;
@@ -187,36 +175,13 @@ class SustainSprite extends FlxSprite {
                 leRect.width = frameWidth;
                 leRect.height = frameHeight - accountedOffset;
                 _tileMatrix.translate(-daOffset * Math.sin(leAngle), daOffset * Math.cos(leAngle));
-                if (canSkew) {
-                    SKEW_X = (daOffset * _skewMatrix.c) * Math.cos(leAngle);
-                    SKEW_Y = (daOffset * _skewMatrix.b) * Math.sin(leAngle);
-                    _tileMatrix.translate(SKEW_X, -SKEW_Y);
-                }
 
                 leFrame.clip(leRect);
-                camera.drawPixels(leFrame, framePixels, _tileMatrix, colorTransform, blend, antialiasing, shader);
-                leRect.put();
             }
-            else
-                camera.drawPixels(leFrame, framePixels, _tileMatrix, colorTransform, blend, antialiasing, shader);
+            else if (canSkew) _tileMatrix.translate((distance * _skewMatrix.c) * Math.cos(leAngle), (distance * _skewMatrix.b) * -Math.sin(leAngle));
+            camera.drawPixels(leFrame, framePixels, _tileMatrix, colorTransform, blend, antialiasing, shader);
+            if (lastHeight > sustainHeight) leRect.put();
         }
-    }
-
-    public function getNoteDirection():String {
-        return Std.string(noteDirection % 4);
-    }
-
-    function setHoldGraphic(bool:Bool):Void {
-        var frameID = (noteDirection % 4) * 2;
-        if (bool) frameID++;
-        frame = frames.frames[frameID];
-
-        height = Math.abs(scale.y) * frameHeight;
-		origin.set(width / 2, 0);
-    }
-
-    public function getSustainInPixels():Float {
-        return sustainLength * Constants.PIXELS_PER_MS * scrollSpeed;
     }
 
     override public function kill():Void {
@@ -228,9 +193,7 @@ class SustainSprite extends FlxSprite {
     override public function revive():Void {
         visible = true;
         super.revive();
-
         resetParams();
-        handledMiss = false;
     }
 
     override public function destroy():Void {

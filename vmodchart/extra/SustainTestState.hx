@@ -6,7 +6,6 @@ import funkin.modding.module.Module;
 import funkin.play.notes.SustainTrail;
 import funkin.play.notes.notestyle.NoteStyle;
 import funkin.ui.MusicBeatState;
-//import funkin.util.plugins.SidePanelPlugin;
 
 class SustainTestState extends MusicBeatState {
     var normalSustain;
@@ -44,7 +43,6 @@ class SustainTestState extends MusicBeatState {
 
         customSustain.angle += Math.cos(elapsedTime * 2);
         cover.angle = customSustain.angle;
-        coverTwo.angle = customSustain.angle;
         cover.x = customSustain.x + (customSustain.width - cover.width) / 2 - 12;
         cover.y = customSustain.y - (cover.height / 2) + 48;
     }
@@ -58,13 +56,5 @@ class SustainTestState extends MusicBeatState {
 //     function onCreate(e) {
 //         super.onCreate(e);
 //         InitState.customTitleState = new SustainTestState();
-//     }
-
-//     function onStateChangeEnd(e) {
-//         super.onStateChangeEnd(e);
-//         if (SidePanelPlugin.instance != null && SidePanelPlugin.showGrabber) {
-//             trace('#rip');
-//             SidePanelPlugin.showGrabber = false;
-//         }
 //     }
 // }
