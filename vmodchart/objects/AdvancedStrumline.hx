@@ -77,31 +77,28 @@ class AdvancedStrumline extends Strumline {
         if (splash != null) {
             final strumNote:StrumlineNote = getByDirection(direction);
             splash.play(direction);
-
-            splash.setPosition(strumNote.x, strumNote.y);
-            splash.x += noteStyle.getSplashOffsets()[0] * splash.scale.x;
-            splash.y += noteStyle.getSplashOffsets()[1] * splash.scale.y;
-
+            splash.setPosition(strumNote.x + (noteStyle.getSplashOffsets()[0] * splash.scale.x), strumNote.y + (noteStyle.getSplashOffsets()[1] * splash.scale.y));
             splash.graphic.destroyOnNoUse = false;
         }
     }
 
-    public function playCoverSprite(holdSprite:SustainSprite):Void {
+    public function playCoverSprite(hold:SustainSprite):Void {
         if (!showNotesplash || !noteStyle.isHoldNoteCoverEnabled()) return;
-        var coverSprite:CoverSprite = coverSprites.getFirstAvailable();
+        var cover:CoverSprite = coverSprites.getFirstAvailable();
 
-        if (coverSprite == null) {
-            coverSprite = new CoverSprite(noteStyle);
-            coverSprites.add(coverSprite);
+        if (cover == null) {
+            cover = new CoverSprite(noteStyle);
+            coverSprites.add(cover);
         }
         else 
-            coverSprite.revive();
+            cover.revive();
 
-        holdSprite.cover = coverSprite;
-        coverSprite.noteDirection = holdSprite.noteDirection;
-        coverSprite.isPlayer = this.isPlayer;
-        coverSprite.playStart();
-        coverSprite.positionToStrumline(this);
+        hold.cover = cover;
+        cover.noteDirection = hold.noteDirection;
+        cover.isPlayer = isPlayer;
+        cover.playStart();
+        cover.positionToStrumline(this);
+        cover.visible = true;
     }
 
     override public function hitNote(note:NoteSprite, removeNote:Bool = true):Void {
@@ -118,10 +115,10 @@ class AdvancedStrumline extends Strumline {
         if (note.noteData.length <= 0) return;
 
         var sustainNote = null;
-        for (holdSprite in holdSprites.members) {
-            if (holdSprite == null || !holdSprite.alive) continue;
-            if ((holdSprite.strumTime == note.noteData.time) && (holdSprite.noteDirection == note.direction)) {
-                sustainNote = holdSprite;
+        for (hold in holdSprites.members) {
+            if (hold == null || !hold.alive) continue;
+            if ((hold.strumTime == note.noteData.time) && (hold.noteDirection == note.direction)) {
+                sustainNote = hold;
                 break;
             }
         }
@@ -141,100 +138,93 @@ class AdvancedStrumline extends Strumline {
 
         for (note in notes.members) {
             if (note == null || !note.alive) continue;
-            final direction:Int = note.direction;
-            final strumNote:StrumlineNote = getByDirection(direction);
-
-            final notePos:Float = GRhythmUtil.getNoteY(note.strumTime, scrollSpeed, false, conductorInUse);
-            final daAngle = strumNote.angle;
-            final xPos:Float = notePos * -Math.sin(daAngle * FlxAngle.TO_RAD);
-            final yPos:Float = notePos * Math.cos(daAngle * FlxAngle.TO_RAD);
-            
-            final strumX:Float = strumNote.x + (strumNote.width - note.width) / 2;
-            final strumY:Float = strumNote.y + (strumNote.height - note.height) / 2;
-
             if (!customPositionData) {
-                note.angle = daAngle;
+                final strumNote:StrumlineNote = getByDirection(note.direction);
+                final notePos:Float = GRhythmUtil.getNoteY(note.strumTime, scrollSpeed, false, conductorInUse);
+                // TODO: Find a better way to center the note to the strumline note since the strumNote can change its width and height depending on the animation
+                final strumX:Float = strumNote.x + (strumNote.width - note.width) / 2;
+                final strumY:Float = strumNote.y + (strumNote.height - note.height) / 2;
+
+                note.angle = strumNote.angle;
                 note.skew.set(strumNote.skew.x, strumNote.skew.y);
-                note.setPosition(strumX + xPos, strumY + yPos);
+                note.setPosition(strumX - (notePos * strumNote._sinAngle), strumY + (notePos * strumNote._cosAngle));
             }
         }
 
-        for (holdSprite in holdSprites.members) {
-            if (holdSprite == null || !holdSprite.alive) continue;
-            final direction:Int = holdSprite.noteDirection;
+        for (hold in holdSprites.members) {
+            if (hold == null || !hold.alive) continue;
+            final direction:Int = hold.noteDirection;
             final strumNote:StrumlineNote = getByDirection(direction);
 
-            final notePos:Float = GRhythmUtil.getNoteY(holdSprite.strumTime, scrollSpeed, false, conductorInUse);
-            final daAngle = strumNote.angle;
-            final xPos:Float = notePos * -Math.sin(daAngle * FlxAngle.TO_RAD);
-            final yPos:Float = notePos * Math.cos(daAngle * FlxAngle.TO_RAD);
+            final notePos:Float = GRhythmUtil.getNoteY(hold.strumTime, scrollSpeed, false, conductorInUse);
+            final xPos:Float = notePos * -strumNote._sinAngle;
+            final yPos:Float = notePos * strumNote._cosAngle;
+            var cover:Null<CoverSprite> = hold.cover;
 
-            final strumX:Float = strumNote.x + (strumNote.width - holdSprite.width) / 2;
-            final strumY:Float = strumNote.y + strumNote.height / 2;
+            if (!customPositionData) {
+                hold.angle = strumNote.angle;
+                hold.skew.set(strumNote.skew.x, strumNote.skew.y);
+                hold.setPosition(strumNote.x + (strumNote.width - hold.width) / 2, strumNote.y + strumNote.height / 2);
+                hold.visible = true;
 
-            final renderWindowEnd:Float = holdSprite.strumTime + holdSprite.fullSustainLength + Constants.HIT_WINDOW_MS + (renderDistanceMs / 8);
-            holdSprite.angle = daAngle;
-            holdSprite.skew.set(strumNote.skew.x, strumNote.skew.y);
-            holdSprite.visible = true;
-
-            if (holdSprite.cover != null) {
-                holdSprite.cover.angle = daAngle;
-                holdSprite.cover.skew.set(strumNote.skew.x, strumNote.skew.y);
-                holdSprite.cover.positionToStrumline(this);
-                holdSprite.cover.visible = true;
+                if (cover != null) {
+                    cover.angle = hold.angle;
+                    cover.skew.set(hold.skew.x, hold.skew.y);
+                    cover.positionToStrumline(this);
+                    cover.visible = true;
+                }
             }
             
-            if (conductorInUse.songPosition > holdSprite.strumTime && holdSprite.hitNote && !holdSprite.missedNote) {
+            if (conductorInUse.songPosition > hold.strumTime && hold.hitNote && !hold.missedNote) {
                 if (isPlayer && !isKeyHeld(direction)) {
                     playStatic(direction);
-                    holdSprite.missedNote = true;
-                    holdSprite.alpha = 0;
+                    hold.missedNote = true;
+                    hold.alpha = 0;
                 }
             }
 
-            if (holdSprite.missedNote && conductorInUse.songPosition >= renderWindowEnd) {
-                holdSprite.kill();
-            }
-            else if (holdSprite.hitNote && holdSprite.sustainLength <= 0) {
+            final renderWindowEnd:Float = hold.strumTime + hold.fullSustainLength + Constants.HIT_WINDOW_MS + (renderDistanceMs / 8);
+            if (hold.missedNote && conductorInUse.songPosition >= renderWindowEnd) hold.kill();
+            else if (hold.hitNote && hold.sustainLength <= 0) {
                 if (isKeyHeld(direction)) playPress(direction);
                 else playStatic(direction);
 
-                if (holdSprite.cover != null) holdSprite.cover.playEnd();
-                holdSprite.kill();
+                if (cover != null) cover.playEnd();
+                hold.kill();
             }
-            else if (holdSprite.missedNote && (holdSprite.fullSustainLength > holdSprite.sustainLength)) {
-                if (!customPositionData) 
-                    holdSprite.setPosition(strumX + xPos, strumY + yPos + ((holdSprite.fullSustainLength - holdSprite.sustainLength) * Constants.PIXELS_PER_MS));
-                if (holdSprite.cover != null) holdSprite.cover.kill();
-            }
-            else if (conductorInUse.songPosition > holdSprite.strumTime && holdSprite.hitNote) {
-                holdConfirm(direction);
-                
+            else if (hold.missedNote && (hold.fullSustainLength > hold.sustainLength)) {
                 if (!customPositionData) {
-                    holdSprite.sustainLength = (holdSprite.strumTime + holdSprite.fullSustainLength) - conductorInUse.songPosition;
-                    holdSprite.setPosition(strumX, strumY);
+                    hold.x += xPos;
+                    hold.y += yPos + ((hold.fullSustainLength - hold.sustainLength) * Constants.PIXELS_PER_MS);
                 }
+                if (cover != null) cover.kill();
+            }
+            else if (conductorInUse.songPosition > hold.strumTime && hold.hitNote) {
+                holdConfirm(direction);
+                hold.sustainLength = (hold.strumTime + hold.fullSustainLength) - conductorInUse.songPosition;
             }
             else {
-                if (!customPositionData) 
-                    holdSprite.setPosition(strumX + xPos, strumY + yPos);
+                if (!customPositionData) {
+                    hold.x += xPos;
+                    hold.y += yPos;
+                }
             }
         }
     }
 
     public function vwooshNotes():Void {
         super.vwooshNotes();
-        for (holdSprite in holdSprites.members) {
-            if (holdSprite == null || !holdSprite.alive) continue;
-            holdSprites.remove(holdSprite);
-            holdNotesVwoosh.add(holdSprite);
+        for (hold in holdSprites.members) {
+            if (hold == null || !hold.alive) continue;
+            holdSprites.remove(hold);
+            holdNotesVwoosh.add(hold);
 
-            var targetY:Float = isDownscroll? holdSprite.y - FlxG.height : FlxG.height + holdSprite.y;
-            FlxTween.tween(holdSprite, {y: targetY}, 0.5, {ease: FlxEase.expoIn,
+            var targetY:Float = isDownscroll? hold.y - FlxG.height : FlxG.height + hold.y;
+            FlxTween.tween(hold, {y: targetY}, 0.5, {ease: FlxEase.expoIn,
                 onComplete: function(twn) {
-                    holdSprite.kill();
-                    holdNotesVwoosh.remove(holdSprite, true);
-                    holdSprite.destroy();
+                    hold.kill();
+                    holdNotesVwoosh.remove(hold, true);
+                    hold.destroy();
                 }
             });
         }

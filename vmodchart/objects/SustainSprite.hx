@@ -38,23 +38,27 @@ class SustainSprite extends FlxSprite {
     var _skewMatrix:FlxMatrix = new FlxMatrix();
     public var skew(default, null):FlxPoint = new FlxPoint();
 
-    public function new(dir:Int, susLength:Float, noteStyle:NoteStyle) {
+    public function new(dir:Int, susLength:Float, ?noteStyle:NoteStyle) {
         super();
-        final assetPath:String = noteStyle.getHoldNoteAssetPath();
-        final image = Assets.getBitmapData(assetPath);
-
-        var dirLength:Float = Strumline.DIRECTIONS.length * 2;
-        loadGraphic(image, true, image.width / dirLength, image.height);
-
-        isPixel = noteStyle.isHoldNotePixel();
-        if (isPixel) antialiasing = false;
-
-        final noteZoom:Float = noteStyle.fetchHoldNoteScale();
-        setGraphicSize(width * noteZoom, height * noteZoom);
+        setStyle(noteStyle);
 
         noteDirection = dir;
-        sustainLength = susLength;
-        height = Math.abs(sustainLength * Constants.PIXELS_PER_MS * scrollSpeed);
+        sustainLength = fullSustainLength = susLength;
+        height = Math.abs(getSustainInPixels());
+    }
+
+    public function setStyle(?noteStyle:NoteStyle) {
+        if (noteStyle == null) noteStyle = new NoteStyle('funkin');
+        final image = Assets.getBitmapData(noteStyle?.getHoldNoteAssetPath());
+        var dirLength:Float = Strumline.DIRECTIONS.length * 2;
+
+        loadGraphic(image, true, image.width / dirLength, image.height);
+
+        isPixel = noteStyle?.isHoldNotePixel();
+        antialiasing = !isPixel;
+
+        final noteZoom:Float = noteStyle?.fetchHoldNoteScale();
+        setGraphicSize(width * noteZoom, height * noteZoom);
     }
 
     public function resetParams():Void {
@@ -72,7 +76,7 @@ class SustainSprite extends FlxSprite {
     }
 
     function setHoldGraphic(bool:Bool):Void {
-        var frameID = (noteDirection % 4) * 2;
+        var frameID = (noteDirection % Strumline.DIRECTIONS.length) * 2;
         if (bool) frameID++;
         frame = frames.frames[frameID];
 
@@ -105,6 +109,10 @@ class SustainSprite extends FlxSprite {
 		return newRect.getRotatedBounds(angle, _scaledOrigin, newRect);
 	}
 
+    private inline function updateSkew():Void {
+		_skewMatrix.setTo(1, Math.tan(skew.y * FlxAngle.TO_RAD), Math.tan(skew.x * FlxAngle.TO_RAD), 1, 0, 0);
+	}
+
     override function drawFrameComplex(frame:FlxFrame, camera:FlxCamera):Void {
         setHoldGraphic(true);
         final matrix = _matrix;
@@ -119,7 +127,7 @@ class SustainSprite extends FlxSprite {
 
         final canSkew:Bool = skew.x != 0 || skew.y != 0;
         if (canSkew) {
-			_skewMatrix.setTo(1, Math.tan(skew.y * FlxAngle.TO_RAD), Math.tan(skew.x * FlxAngle.TO_RAD), 1, 0, 0);
+			updateSkew();
 			matrix.concat(_skewMatrix);
 		}
 		
@@ -131,23 +139,21 @@ class SustainSprite extends FlxSprite {
             _point.y = Math.floor(_point.y);
         }
 
-        final sustainHeight = getSustainInPixels() - (isPixel? height : height / 2);
-        final leAngle:Float = angle * FlxAngle.TO_RAD;
+        final sustainHeight:Float = getSustainInPixels() - (isPixel? height : height / 2);
+        var leRect:FlxRect = new FlxRect(0, 0, frameWidth, frameHeight);
+        var leFrame:FlxFrame = _frame;
 
         _tileMatrix.copyFrom(matrix);
-        _tileMatrix.translate(_point.x - (sustainHeight * Math.sin(leAngle)), _point.y + (sustainHeight * Math.cos(leAngle)));
-
-        var leFrame = _frame;
-        var leRect:FlxRect = new FlxRect(0, 0, frameWidth, frameHeight);
+        _tileMatrix.translate(_point.x - (sustainHeight * _sinAngle), _point.y + (sustainHeight * _cosAngle));
 
         if (0 > sustainHeight) {
-            final daOffset = -sustainHeight;
-            final accountedOffset = Math.max(daOffset / scale.y, 0);
+            final daOffset:Float = -sustainHeight;
+            final accountedOffset:Float = Math.max(daOffset / scale.y, 0);
             leRect.y = accountedOffset;
             leRect.height -= accountedOffset;
-            _tileMatrix.translate(-daOffset * Math.sin(leAngle), daOffset * Math.cos(leAngle));
+            _tileMatrix.translate(-daOffset * _sinAngle, daOffset * _cosAngle);
         }
-        else if (canSkew) _tileMatrix.translate((sustainHeight * _skewMatrix.c) * Math.cos(leAngle), -(sustainHeight * _skewMatrix.b) * Math.sin(leAngle));
+        else if (canSkew) _tileMatrix.translate((sustainHeight * _skewMatrix.c) * _cosAngle, -(sustainHeight * _skewMatrix.b) * _sinAngle);
 
         if (!isPixel) leRect.height *= 0.9;
         if (leRect.height != frameHeight) leFrame.clip(leRect);
@@ -166,19 +172,19 @@ class SustainSprite extends FlxSprite {
             leFrame = _frame;
 
             _tileMatrix.copyFrom(matrix);
-            _tileMatrix.translate(_point.x - (distance * Math.sin(leAngle)), _point.y + (distance * Math.cos(leAngle)));
+            _tileMatrix.translate(_point.x - (distance * _sinAngle), _point.y + (distance * _cosAngle));
             
             if (lastHeight > sustainHeight) {
-                final daOffset = lastHeight - sustainHeight;
-                final accountedOffset = Math.max(daOffset / scale.y, 0);
+                final daOffset:Float = lastHeight - sustainHeight;
+                final accountedOffset:Float = Math.max(daOffset / scale.y, 0);
                 leRect.y = accountedOffset;
                 leRect.width = frameWidth;
                 leRect.height = frameHeight - accountedOffset;
-                _tileMatrix.translate(-daOffset * Math.sin(leAngle), daOffset * Math.cos(leAngle));
+                _tileMatrix.translate(-daOffset * _sinAngle, daOffset * _cosAngle);
 
                 leFrame.clip(leRect);
             }
-            else if (canSkew) _tileMatrix.translate((distance * _skewMatrix.c) * Math.cos(leAngle), (distance * _skewMatrix.b) * -Math.sin(leAngle));
+            else if (canSkew) _tileMatrix.translate((distance * _skewMatrix.c) * _cosAngle, -(distance * _skewMatrix.b) * _sinAngle);
             camera.drawPixels(leFrame, framePixels, _tileMatrix, colorTransform, blend, antialiasing, shader);
             if (lastHeight > sustainHeight) leRect.put();
         }
