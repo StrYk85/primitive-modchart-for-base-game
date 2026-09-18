@@ -8,14 +8,22 @@ class DemonstrationModule extends Module {
         super('DemonstrationModule', 100, {state:PlayState});
     }
 
-     function onUpdate(e) {
+    function onStateChangeEnd(e) {
+        super.onStateChangeEnd(e);
+        final game = PlayState.instance;
+        game.opponentStrumline.noteSongPosition = function(delta:Bool) {
+            return game.conductorInUse.stepLengthMs * game.conductorInUse.currentStep;
+        }
+    }
+
+    function onUpdate(e) {
         super.onUpdate(e);
         final game = PlayState.instance;
         for (strumline in [game.opponentStrumline, game.playerStrumline]) {
             if (strumline != null) {
                 for (a => strumNote in strumline.strumlineNotes.members) {
-                    strumNote.y = 100 + Math.sin((game.conductorInUse.songPosition / 1000) + a) * 100;
-                    strumNote.skew.y = Math.sin(game.conductorInUse.songPosition / 1000) * -25;
+                    strumNote.y = (Preferences.downscroll? FlxG.height - 250 : 100) + Math.sin((strumline.getSongPosition() / 1000) + a) * 100;
+                    strumNote.skew.y = Math.sin(strumline.getSongPosition() / 1000) * -25;
                 }
             }
         }

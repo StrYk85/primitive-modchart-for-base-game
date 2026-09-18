@@ -5,13 +5,14 @@ import flixel.group.FlxSpriteGroup.FlxTypedSpriteGroup;
 import flixel.tweens.FlxTween;
 import flixel.tweens.FlxEase;
 import flixel.math.FlxAngle;
+import flixel.math.FlxMath;
 
+import funkin.Conductor;
 import funkin.play.notes.Strumline;
 import funkin.play.notes.SustainTrail;
 import funkin.play.notes.NoteSprite;
 import funkin.play.notes.notekind.NoteKind;
 import funkin.play.notes.notekind.NoteKindManager;
-import funkin.util.GRhythmUtil;
 
 class AdvancedStrumline extends Strumline {
     public var holdSprites:FlxTypedSpriteGroup<SustainSprite>;
@@ -60,6 +61,7 @@ class AdvancedStrumline extends Strumline {
             sustainSprite.parentStrumline = this;
             sustainSprite.visible = true;
             sustainSprite.alpha = 1.0;
+            sustainSprite.flipX = isDownscroll;
             sustainSprite.graphic.destroyOnNoUse = false;
             if (noteKind != null) sustainSprite.scoreable = noteKind.scoreable;
 
@@ -132,22 +134,36 @@ class AdvancedStrumline extends Strumline {
         }
     }
 
+    public var noteYFunction:(strumTime:Float)->Float;
+    public var noteSongPosition:(delta:Bool)->Float;
+
+    public function getSongPosition(?delta:Bool = false):Float {
+        return noteSongPosition != null? noteSongPosition(delta) : (delta? conductorInUse.getTimeWithDelta() : conductorInUse.songPosition);
+    }
+
+    public function getNoteY(strumTime:Float):Float {
+        if (conductorInUse == null) conductorInUse = Conductor.instance;
+        return Constants.PIXELS_PER_MS * (getSongPosition(true) - strumTime) * -scrollSpeed;
+    }
+
     public function updateNotes():Void {
         super.updateNotes();
         if (noteData.length == 0) return;
+        if (noteYFunction == null) noteYFunction = getNoteY;
 
         for (note in notes.members) {
             if (note == null || !note.alive) continue;
             if (!customPositionData) {
                 final strumNote:StrumlineNote = getByDirection(note.direction);
-                final notePos:Float = GRhythmUtil.getNoteY(note.strumTime, scrollSpeed, false, conductorInUse);
+                final notePos:Float = noteYFunction(note.strumTime);
+                final strumAngle = FlxMath.wrap(isDownscroll? 180 - strumNote.angle : strumNote.angle, 0, 360);
                 // TODO: Find a better way to center the note to the strumline note since the strumNote can change its width and height depending on the animation
                 final strumX:Float = strumNote.x + (strumNote.width - note.width) / 2;
                 final strumY:Float = strumNote.y + (strumNote.height - note.height) / 2;
 
                 note.angle = strumNote.angle;
                 note.skew.set(strumNote.skew.x, strumNote.skew.y);
-                note.setPosition(strumX - (notePos * strumNote._sinAngle), strumY + (notePos * strumNote._cosAngle));
+                note.setPosition(strumX - (notePos * Math.sin(strumAngle * FlxAngle.TO_RAD)), strumY + (notePos * Math.cos(strumAngle * FlxAngle.TO_RAD)));
             }
         }
 
@@ -156,19 +172,20 @@ class AdvancedStrumline extends Strumline {
             final direction:Int = hold.noteDirection;
             final strumNote:StrumlineNote = getByDirection(direction);
 
-            final notePos:Float = GRhythmUtil.getNoteY(hold.strumTime, scrollSpeed, false, conductorInUse);
-            final xPos:Float = notePos * -strumNote._sinAngle;
-            final yPos:Float = notePos * strumNote._cosAngle;
+            final notePos:Float = noteYFunction(hold.strumTime);
+            final strumAngle = FlxMath.wrap(isDownscroll? 180 - strumNote.angle : strumNote.angle, 0, 360);
+            final xPos:Float = notePos * -Math.sin(strumAngle * FlxAngle.TO_RAD);
+            final yPos:Float = notePos * Math.cos(strumAngle * FlxAngle.TO_RAD);
             var cover:Null<CoverSprite> = hold.cover;
 
             if (!customPositionData) {
-                hold.angle = strumNote.angle;
+                hold.angle = strumAngle;
                 hold.skew.set(strumNote.skew.x, strumNote.skew.y);
                 hold.setPosition(strumNote.x + (strumNote.width - hold.width) / 2, strumNote.y + strumNote.height / 2);
                 hold.visible = true;
 
                 if (cover != null) {
-                    cover.angle = hold.angle;
+                    cover.angle = strumNote.angle;
                     cover.skew.set(hold.skew.x, hold.skew.y);
                     cover.positionToStrumline(this);
                     cover.visible = true;
@@ -201,7 +218,7 @@ class AdvancedStrumline extends Strumline {
             }
             else if (conductorInUse.songPosition > hold.strumTime && hold.hitNote) {
                 holdConfirm(direction);
-                hold.sustainLength = (hold.strumTime + hold.fullSustainLength) - conductorInUse.songPosition;
+                hold.sustainLength = (hold.strumTime + hold.fullSustainLength) - getSongPosition(false);
             }
             else {
                 if (!customPositionData) {
