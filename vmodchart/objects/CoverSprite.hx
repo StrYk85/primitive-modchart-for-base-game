@@ -54,8 +54,8 @@ class CoverSprite extends FunkinSprite {
 
     public function positionToStrumline(strumline:Strumline):Void {
         var strumNote = strumline.getByDirection(noteDirection);
-        x = strumNote.x + (strumNote.width - width) / 2 - (coverOffset.x / scale.x);
-        y = strumNote.y + (strumNote.height - height) / 2 - (coverOffset.y / scale.y);
+        x = strumNote.x + strumline.strumCenter - (width / 2) - strumline.strumNoteOffset.x - (coverOffset.x / scale.x);
+        y = strumNote.y + strumline.strumCenter - (height / 2) - strumline.strumNoteOffset.y - (coverOffset.y / scale.y);
     }
 
     public function setOrigin():Void {

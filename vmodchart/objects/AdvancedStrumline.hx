@@ -6,6 +6,8 @@ import flixel.tweens.FlxTween;
 import flixel.tweens.FlxEase;
 import flixel.math.FlxAngle;
 import flixel.math.FlxMath;
+import flixel.math.FlxPoint;
+import flixel.util.FlxDestroyUtil;
 
 import funkin.Conductor;
 import funkin.play.notes.Strumline;
@@ -24,6 +26,9 @@ class AdvancedStrumline extends Strumline {
     public var oldSustainJitter:Bool = false;
     public var holdTimer:Float = 0;
 
+    public var strumNoteOffset(default, null):FlxPoint = new FlxPoint();
+    public var strumCenter(default, never):Float = -Strumline.INITIAL_OFFSET + (Strumline.STRUMLINE_SIZE / 2);
+
     public function new(noteStyle:NoteStyle, isPlayer:Bool, ?scrollSpeed:Float) {
         super(noteStyle, isPlayer, scrollSpeed);
         remove(holdNotes);
@@ -39,6 +44,9 @@ class AdvancedStrumline extends Strumline {
 
         dummySustain = new SustainTrail(0, 0, noteStyle);
         dummyNote = new NoteSprite(noteStyle);
+
+        final strumOffsets = noteStyle.getStrumlineOffsets();
+        strumNoteOffset.set(strumOffsets[0], strumOffsets[1]);
     }
 
     override public function buildHoldNoteSprite(note:SongNoteData):SustainSprite {
@@ -73,14 +81,14 @@ class AdvancedStrumline extends Strumline {
     }
 
     override public function playNoteSplash(direction:NoteDirection):Void {
-        // TODO: Fix splash offsets.
         if (!showNotesplash || !noteStyle.isNoteSplashEnabled()) return;
         var splash:NoteSplash = constructNoteSplash();
 
         if (splash != null) {
             final strumNote:StrumlineNote = getByDirection(direction);
             splash.play(direction);
-            splash.setPosition(strumNote.x + (noteStyle.getSplashOffsets()[0] * splash.scale.x), strumNote.y + (noteStyle.getSplashOffsets()[1] * splash.scale.y));
+            splash.x = (strumNote.x - strumNoteOffset.x) + (noteStyle.getSplashOffsets()[0] * splash.scale.x);
+            splash.y = (strumNote.y - strumNoteOffset.y) - Strumline.INITIAL_OFFSET + (noteStyle.getSplashOffsets()[1] * splash.scale.y);
             splash.graphic.destroyOnNoUse = false;
         }
     }
@@ -158,9 +166,9 @@ class AdvancedStrumline extends Strumline {
                 final strumNote:StrumlineNote = getByDirection(note.direction);
                 final notePos:Float = noteYFunction(note.strumTime);
                 final strumAngle = FlxMath.wrap(isDownscroll? 180 - strumNote.angle : strumNote.angle, 0, 360);
-                // TODO: Find a better way to center the note to the strumline note since the strumNote can change its width and height depending on the animation
-                final strumX:Float = strumNote.x + (strumNote.width - note.width) / 2;
-                final strumY:Float = strumNote.y + (strumNote.height - note.height) / 2;
+
+                final strumX:Float = strumNote.x + strumCenter - (note.width / 2) - strumNoteOffset.x;
+                final strumY:Float = strumNote.y + strumCenter - (note.height / 2) - strumNoteOffset.y;
 
                 note.angle = strumNote.angle;
                 note.skew.set(strumNote.skew.x, strumNote.skew.y);
@@ -182,7 +190,7 @@ class AdvancedStrumline extends Strumline {
             if (!customPositionData) {
                 hold.angle = strumAngle;
                 hold.skew.set(strumNote.skew.x, strumNote.skew.y);
-                hold.setPosition(strumNote.x + (strumNote.width - hold.width) / 2, strumNote.y + strumNote.height / 2);
+                hold.setPosition(strumNote.x + strumCenter - (hold.width / 2) - strumNoteOffset.x, strumNote.y + strumCenter - strumNoteOffset.y);
                 hold.visible = true;
 
                 if (cover != null) {
@@ -259,5 +267,10 @@ class AdvancedStrumline extends Strumline {
             if (cover == null) continue;
             cover.kill();
         }
+    }
+
+    override public function destroy():Void {
+        super.destroy();
+        strumNoteOffset = FlxDestroyUtil.put(strumNoteOffset);
     }
 }
