@@ -144,6 +144,7 @@ class AdvancedStrumline extends Strumline {
     }
 
     public var noteYFunction:(strumTime:Float)->Float;
+    public var notePosFunction:(note:Dynamic, isSustain:Bool)->Void;
     public var noteSongPosition:(delta:Bool)->Float;
 
     public function getSongPosition(?delta:Bool = false):Float {
@@ -151,55 +152,66 @@ class AdvancedStrumline extends Strumline {
     }
 
     public function getNoteY(strumTime:Float):Float {
+        if (noteYFunction != null) {
+            noteYFunction();
+            return;
+        }
         if (conductorInUse == null) conductorInUse = Conductor.instance;
         return Constants.PIXELS_PER_MS * (getSongPosition(true) - strumTime) * -scrollSpeed;
+    }
+
+    public function updateNotePosition(note:Dynamic, isSustain:Bool) {
+        if (!(note is NoteSprite) && note.toString() != 'PolymodScriptClass<vmodchart.objects.SustainSprite>') return;
+        if (notePosFunction != null) {
+            notePosFunction(note, isSustain);
+            return;
+        }
+
+        if (isSustain == null) isSustain = note.toString() == 'PolymodScriptClass<vmodchart.objects.SustainSprite>';
+        final direction:NoteDirection = isSustain? note.noteDirection : note.direction;
+
+        final strumNote:StrumlineNote = getByDirection(direction);
+        final notePos:Float = getNoteY(note.strumTime);
+
+        final strumAngle = FlxMath.wrap(isDownscroll? 180 - strumNote.angle : strumNote.angle, 0, 360);
+        final xPos:Float = notePos * -Math.sin(strumAngle * FlxAngle.TO_RAD);
+        final yPos:Float = notePos * Math.cos(strumAngle * FlxAngle.TO_RAD);
+
+        final strumX:Float = strumNote.x + strumCenter - (note.width / 2) - strumNoteOffset.x;
+        final strumY:Float = strumNote.y + strumCenter - (!isSustain? note.height / 2 : 0) - strumNoteOffset.y;
+
+        note.angle = strumNote.angle;
+        note.skew.set(strumNote.skew.x, strumNote.skew.y);
+        note.setPosition(strumX, strumY);
+        if (isSustain) {
+            note.visible = true;
+            if (!note.hitNote || note.missedNote) {
+                note.x += xPos;
+                note.y += yPos;
+                if (note.missedNote && (note.fullSustainLength > note.sustainLength)) 
+                    note.y += (note.fullSustainLength - note.sustainLength) * Constants.PIXELS_PER_MS;
+            }
+
+            if (note.cover != null) note.cover.skew.set(note.skew.x, note.skew.y);
+        }
+        else {
+            note.x += xPos;
+            note.y += yPos;
+        }
     }
 
     public function updateNotes():Void {
         super.updateNotes();
         if (noteData.length == 0) return;
-        if (noteYFunction == null) noteYFunction = getNoteY;
 
         for (note in notes.members) {
             if (note == null || !note.alive) continue;
-            if (!customPositionData) {
-                final strumNote:StrumlineNote = getByDirection(note.direction);
-                final notePos:Float = noteYFunction(note.strumTime);
-                final strumAngle = FlxMath.wrap(isDownscroll? 180 - strumNote.angle : strumNote.angle, 0, 360);
-
-                final strumX:Float = strumNote.x + strumCenter - (note.width / 2) - strumNoteOffset.x;
-                final strumY:Float = strumNote.y + strumCenter - (note.height / 2) - strumNoteOffset.y;
-
-                note.angle = strumNote.angle;
-                note.skew.set(strumNote.skew.x, strumNote.skew.y);
-                note.setPosition(strumX - (notePos * Math.sin(strumAngle * FlxAngle.TO_RAD)), strumY + (notePos * Math.cos(strumAngle * FlxAngle.TO_RAD)));
-            }
+            updateNotePosition(note, false);
         }
 
         for (hold in holdSprites.members) {
             if (hold == null || !hold.alive) continue;
             final direction:Int = hold.noteDirection;
-            final strumNote:StrumlineNote = getByDirection(direction);
-
-            final notePos:Float = noteYFunction(hold.strumTime);
-            final strumAngle = FlxMath.wrap(isDownscroll? 180 - strumNote.angle : strumNote.angle, 0, 360);
-            final xPos:Float = notePos * -Math.sin(strumAngle * FlxAngle.TO_RAD);
-            final yPos:Float = notePos * Math.cos(strumAngle * FlxAngle.TO_RAD);
-            var cover:Null<CoverSprite> = hold.cover;
-
-            if (!customPositionData) {
-                hold.angle = strumAngle;
-                hold.skew.set(strumNote.skew.x, strumNote.skew.y);
-                hold.setPosition(strumNote.x + strumCenter - (hold.width / 2) - strumNoteOffset.x, strumNote.y + strumCenter - strumNoteOffset.y);
-                hold.visible = true;
-
-                if (cover != null) {
-                    cover.angle = strumNote.angle;
-                    cover.skew.set(hold.skew.x, hold.skew.y);
-                    cover.positionToStrumline(this);
-                    cover.visible = true;
-                }
-            }
             
             if (conductorInUse.songPosition > hold.strumTime && hold.hitNote && !hold.missedNote) {
                 if (isPlayer && !isKeyHeld(direction)) {
@@ -214,27 +226,26 @@ class AdvancedStrumline extends Strumline {
             else if (hold.hitNote && hold.sustainLength <= 0) {
                 if (isKeyHeld(direction)) playPress(direction);
                 else playStatic(direction);
-
-                if (cover != null) cover.playEnd();
                 hold.kill();
-            }
-            else if (hold.missedNote && (hold.fullSustainLength > hold.sustainLength)) {
-                if (!customPositionData) {
-                    hold.x += xPos;
-                    hold.y += yPos + ((hold.fullSustainLength - hold.sustainLength) * Constants.PIXELS_PER_MS);
-                }
-                if (cover != null) cover.kill();
             }
             else if (conductorInUse.songPosition > hold.strumTime && hold.hitNote) {
                 holdConfirm(direction);
                 hold.sustainLength = (hold.strumTime + hold.fullSustainLength) - getSongPosition(false);
             }
-            else {
-                if (!customPositionData) {
-                    hold.x += xPos;
-                    hold.y += yPos;
+
+            if (hold.cover != null) {
+                var cover:Null<CoverSprite> = hold.cover;
+                cover.angle = getByDirection(direction);
+                cover.positionToStrumline(this);
+                cover.visible = true;
+
+                if (hold.missedNote) {
+                    cover.visible = false;
+                    cover.kill();
                 }
+                else if (hold.hitNote && hold.sustainLength <= 0) cover.playEnd();
             }
+            updateNotePosition(hold, true);
         }
     }
 
