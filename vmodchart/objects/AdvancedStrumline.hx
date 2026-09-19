@@ -10,6 +10,7 @@ import flixel.math.FlxPoint;
 import flixel.util.FlxDestroyUtil;
 
 import funkin.Conductor;
+import funkin.util.MathUtil;
 import funkin.play.notes.Strumline;
 import funkin.play.notes.SustainTrail;
 import funkin.play.notes.NoteSprite;
@@ -144,7 +145,8 @@ class AdvancedStrumline extends Strumline {
     }
 
     public var noteYFunction:(strumTime:Float)->Float;
-    public var notePosFunction:(note:Dynamic, isSustain:Bool)->Void;
+    public var notePosFunction:(note:Dynamic, isSustain:Bool, notePos:Float, strumPos:FlxPoint)->Void;
+    public var notePosFunctionPost:(note:Dynamic, isSustain:Bool, notePos:Float, strumPos:FlxPoint)->Void;
     public var noteSongPosition:(delta:Bool)->Float;
 
     public function getSongPosition(?delta:Bool = false):Float {
@@ -162,10 +164,6 @@ class AdvancedStrumline extends Strumline {
 
     public function updateNotePosition(note:Dynamic, isSustain:Bool) {
         if (!(note is NoteSprite) && note.toString() != 'PolymodScriptClass<vmodchart.objects.SustainSprite>') return;
-        if (notePosFunction != null) {
-            notePosFunction(note, isSustain);
-            return;
-        }
 
         if (isSustain == null) isSustain = note.toString() == 'PolymodScriptClass<vmodchart.objects.SustainSprite>';
         final direction:NoteDirection = isSustain? note.noteDirection : note.direction;
@@ -175,14 +173,21 @@ class AdvancedStrumline extends Strumline {
 
         final strumAngle = FlxMath.wrap(isDownscroll? 180 - strumNote.angle : strumNote.angle, 0, 360);
         final xPos:Float = notePos * -Math.sin(strumAngle * FlxAngle.TO_RAD);
-        final yPos:Float = notePos * Math.cos(strumAngle * FlxAngle.TO_RAD);
+        var yPos:Float = notePos * Math.cos(strumAngle * FlxAngle.TO_RAD);
 
         final strumX:Float = strumNote.x + strumCenter - (note.width / 2) - strumNoteOffset.x;
         final strumY:Float = strumNote.y + strumCenter - (!isSustain? note.height / 2 : 0) - strumNoteOffset.y;
+        var strumPos:FlxPoint = FlxPoint.get(strumX, strumY);
+
+        if (notePosFunction != null) {
+            notePosFunction(note, isSustain, notePos, strumPos);
+            strumPos.put();
+            return;
+        }
 
         note.angle = strumNote.angle;
         note.skew.set(strumNote.skew.x, strumNote.skew.y);
-        note.setPosition(strumX, strumY);
+        note.setPosition(strumPos.x, strumPos.y);
         if (isSustain) {
             note.visible = true;
             if (!note.hitNote || note.missedNote) {
@@ -192,12 +197,18 @@ class AdvancedStrumline extends Strumline {
                     note.y += (note.fullSustainLength - note.sustainLength) * Constants.PIXELS_PER_MS;
             }
 
-            if (note.cover != null) note.cover.skew.set(note.skew.x, note.skew.y);
+            if (note.cover != null) {
+                note.cover.angle = FlxMath.wrap(isDownscroll? 180 - note.angle : note.angle, 0, 360);
+                note.cover.skew.set(note.skew.x, note.skew.y);
+            }
         }
         else {
             note.x += xPos;
             note.y += yPos;
         }
+
+        if (notePosFunctionPost != null) notePosFunctionPost(note, isSustain, notePos, strumPos);
+        strumPos.put();
     }
 
     public function updateNotes():Void {
@@ -235,7 +246,6 @@ class AdvancedStrumline extends Strumline {
 
             if (hold.cover != null) {
                 var cover:Null<CoverSprite> = hold.cover;
-                cover.angle = getByDirection(direction);
                 cover.positionToStrumline(this);
                 cover.visible = true;
 

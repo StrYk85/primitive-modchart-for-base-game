@@ -66,11 +66,8 @@ class SustainSprite extends FlxSprite {
         antialiasing = !isPixel;
 
         if (!isPixel) 
-            for (i in 0...Strumline.DIRECTIONS.length) {
-                var f = frames.frames[((i % Strumline.DIRECTIONS.length) * 2) + 1].frame;
-                f.height = image.height * 0.9;
-                frames.frames[((i % Strumline.DIRECTIONS.length) * 2) + 1].frame = f;
-            }
+            for (i in 0...Strumline.DIRECTIONS.length) 
+                frames.frames[((i % Strumline.DIRECTIONS.length) * 2) + 1].frame.height = image.height * 0.9;
 
         final noteZoom:Float = noteStyle?.fetchHoldNoteScale();
         scale.set(noteZoom, noteZoom);
