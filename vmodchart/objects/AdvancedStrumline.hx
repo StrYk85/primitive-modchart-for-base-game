@@ -66,6 +66,7 @@ class AdvancedStrumline extends Strumline {
             if (noteKind != null) sustainSprite.scoreable = noteKind.scoreable;
 
             sustainSprite.setPosition(-9999, -9999);
+            sustainSprite.visibleLimit = 10;
         }
 
         return null;
